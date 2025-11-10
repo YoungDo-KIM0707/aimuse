@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import Footer from "./components/Footer";
 
+
 export default function Login() {
   const navigate = useNavigate();
   const [id, setId] = useState("");
@@ -68,12 +69,16 @@ export default function Login() {
             >
               로그인
             </button>
+            <Link
+  to="/signup"
+  className="block mt-3 text-sm text-gray-600 hover:underline text-center"
+>
+  회원가입
+</Link>
+
           </form>
 
-          <p className="mt-4 text-center text-sm text-gray-500">
-            임시 계정 <br />
-            ID: <b>qwer</b> / PW: <b>1234</b>
-          </p>
+          
         </div>
       </main>
        <Footer />

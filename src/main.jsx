@@ -7,6 +7,7 @@ import Login from "./Login";
 import Terms from "./Terms";
 import Privacy from "./Privacy";
 import Creators from "./Creators";
+import Signup from "./Signup";
 import "./index.css";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
@@ -18,6 +19,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
         <Route path="/terms" element={<Terms />} />
         <Route path="/privacy" element={<Privacy />} />
         <Route path="/creators" element={<Creators />} />
+        <Route path="/signup" element={<Signup />} />
       </Routes>
     </BrowserRouter>
   </React.StrictMode>

@@ -48,14 +48,16 @@ export default function Header() {
 
           {/* 우측 영역: 로그인 전/후 전환 */}
           {!loggedIn ? (
-            // 로그인 전: 로그인 버튼만
-            <Link
-              to="/login"
-              className="inline-flex items-center rounded-xl border px-4 py-1.5 text-sm font-medium hover:bg-gray-50"
-            >
-              로그인
-            </Link>
-          ) : (
+   // 로그인 전: 회원가입 페이지에서는 로그인 버튼 숨김
+   location.pathname !== "/signup" && (
+     <Link
+       to="/login"
+       className="inline-flex items-center rounded-xl border px-4 py-1.5 text-sm font-medium hover:bg-gray-50"
+     >
+       로그인
+     </Link>
+  )
+ ) : (
             // 로그인 후: 환영문구 + 마이페이지 + 로그아웃
             <div className="flex items-center gap-2 text-sm">
               <span className="hidden sm:inline text-gray-600">
