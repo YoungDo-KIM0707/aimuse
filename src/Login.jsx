@@ -1,63 +1,82 @@
-// src/Login.jsx
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import Header from "./components/Header";
+import Footer from "./components/Footer";
 
 export default function Login() {
-  const [email, setEmail] = useState("");
+  const navigate = useNavigate();
+  const [id, setId] = useState("");
   const [pw, setPw] = useState("");
   const [error, setError] = useState("");
-  const navigate = useNavigate();
 
-  const onSubmit = (e) => {
+  const handleLogin = (e) => {
     e.preventDefault();
-    if (!email.includes("@") || pw.length < 4) {
-      setError("올바른 이메일과 4자 이상 비밀번호를 입력하세요.");
-      return;
+
+    const MASTER_ID = "qwer";
+    const MASTER_PW = "1234";
+
+    if (id === MASTER_ID && pw === MASTER_PW) {
+      localStorage.setItem("loggedIn", "true");
+      navigate("/");
+    } else {
+      setError("아이디 또는 비밀번호가 올바르지 않습니다.");
     }
-    navigate("/"); // 로그인 성공 → 홈으로
   };
 
   return (
-        <div className="min-h-screen bg-gray-50">
-        <Header /> 
-        <div className="w-full max-w-sm mx-auto mt-10 rounded-2xl bg-white p-8 shadow-md border">
-        <h2 className="text-xl font-bold mb-2">AIMUSE 로그인</h2>
-        <p className="mb-4 text-sm text-gray-600">계정으로 로그인해주세요.</p>
-        <form onSubmit={onSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700">이메일</label>
+    <div className="min-h-screen bg-gray-50 flex flex-col">
+      {/* ✅ 상단 헤더 복구 */}
+      <header className="border-b bg-white/80 backdrop-blur sticky top-0 z-30">
+        <nav className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4">
+          {/* AIMUSE 로고 클릭 시 홈으로 이동 */}
+          <Link
+            to="/"
+            className="text-xl font-extrabold tracking-tight hover:opacity-80"
+          >
+            AIMUSE
+          </Link>
+        </nav>
+      </header>
+
+      {/* ✅ 로그인 폼 */}
+      <main className="flex flex-1 flex-col items-center justify-center px-4">
+        <div className="w-full max-w-sm rounded-2xl bg-white p-8 shadow-lg">
+          <h1 className="text-2xl font-bold text-center mb-6">로그인</h1>
+
+          <form onSubmit={handleLogin} className="flex flex-col gap-4">
             <input
-              type="email"
-              className="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
-              placeholder="you@example.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              type="text"
+              placeholder="아이디"
+              value={id}
+              onChange={(e) => setId(e.target.value)}
+              className="border rounded-lg px-3 py-2"
             />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700">비밀번호</label>
             <input
               type="password"
-              className="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
-              placeholder="4자 이상"
+              placeholder="비밀번호"
               value={pw}
               onChange={(e) => setPw(e.target.value)}
-              minLength={4}
+              className="border rounded-lg px-3 py-2"
             />
-          </div>
-          {error && <p className="text-sm text-red-500">{error}</p>}
-          <button
-            type="submit"
-            className="w-full rounded-xl bg-black py-2 text-white font-medium hover:bg-gray-800"
-          >
-            로그인
-          </button>
-        </form>
-        <div className="mt-4 flex justify-between text-sm text-gray-600">
-          <span className="opacity-60">회원가입(추가 예정)</span>
+
+            {error && (
+              <p className="text-red-500 text-sm text-center">{error}</p>
+            )}
+
+            <button
+              type="submit"
+              className="mt-2 bg-black text-white rounded-lg py-2 hover:bg-gray-800"
+            >
+              로그인
+            </button>
+          </form>
+
+          <p className="mt-4 text-center text-sm text-gray-500">
+            임시 계정 <br />
+            ID: <b>qwer</b> / PW: <b>1234</b>
+          </p>
         </div>
-      </div>
+      </main>
+       <Footer />
     </div>
   );
 }

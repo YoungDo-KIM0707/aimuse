@@ -1,4 +1,5 @@
 import Header from "./components/Header";
+import Footer from "./components/Footer";
 
 export default function Privacy() {
   return (
@@ -105,6 +106,7 @@ export default function Privacy() {
           </p>
         </section>
       </main>
+       <Footer />
     </div>
   );
 }
