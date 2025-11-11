@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import Header from "./components/Header";
 import Footer from "./components/Footer";
+import { postJSON, BASE } from "./lib/api"; // ★ BASE도 가져와서 디버그 찍자
 
 export default function Signup() {
   const navigate = useNavigate();
@@ -10,20 +11,20 @@ export default function Signup() {
   const [id, setId] = useState("");
   const [pw, setPw] = useState("");
   const [pw2, setPw2] = useState("");
-  const [error, setError] = useState("");     // 폼 전체 에러
-  const [fieldErr, setFieldErr] = useState({  // 필드별 에러
-    id: "",
-    pw: "",
-    pw2: "",
-  });
+  const [error, setError] = useState("");
+  const [fieldErr, setFieldErr] = useState({ id: "", pw: "", pw2: "" });
   const [pending, setPending] = useState(false);
 
   const validate = () => {
     const next = { id: "", pw: "", pw2: "" };
     let ok = true;
 
-    if (!id.trim()) {
-      next.id = "아이디를 입력하세요.";
+    const email = id.trim().toLowerCase();
+    if (!email) {
+      next.id = "이메일을 입력하세요.";
+      ok = false;
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      next.id = "올바른 이메일 형식이 아닙니다.";
       ok = false;
     }
     if (pw.length < 4) {
@@ -36,25 +37,43 @@ export default function Signup() {
     }
 
     setFieldErr(next);
-    setError(""); // 상단 공통 에러 초기화
+    setError("");
     return ok;
   };
 
   const onSubmit = async (e) => {
     e.preventDefault();
+    if (pending) return;              // ★ 중복 제출 방지
     if (!validate()) return;
 
-    // 백엔드 없으므로 데모용 처리
+    const email = id.trim().toLowerCase();
     try {
       setPending(true);
-      await new Promise((r) => setTimeout(r, 600)); // 살짝 대기(UX)
-      // 필요하면 임시 저장 (선택)
-      localStorage.setItem("lastSignupUser", id);
 
+      // 디버그: 실제 요청 URL 확인
+      console.log("[Signup] POST", `${BASE}/api/user/join`, { email });
+
+      const res = await postJSON("/api/user/join", { email, password: pw });
+
+      // 서버가 201/200에 바디 없을 수도 있음 → res가 string일 수 있음 (postJSON에서 처리)
       alert("회원가입이 완료되었습니다. 로그인해 주세요.");
       navigate("/login");
-    } catch (err) {
-      setError("일시적인 오류가 발생했습니다. 다시 시도해 주세요.");
+    } catch (e) {
+      // 상태코드별 안내 강화 + 서버 메시지 우선 노출
+      if (e.status === 409) setError("이미 가입된 이메일입니다.");
+      else if (e.status === 400) setError(e.payload?.message || "요청 형식이 올바르지 않습니다.");
+      else if (e.status === 401) setError("인증이 필요합니다(백엔드 시큐리티 설정 확인 필요).");
+      else if (e.status === 403) setError("권한이 없습니다.");
+      else if (e.status === 404) setError("가입 API 경로를 찾을 수 없습니다(/api/user/join 확인).");
+      else if (e.status === 415) setError("서버가 JSON을 기대합니다. Content-Type 확인 필요.");
+      else if (e.status >= 500) setError("서버 오류가 발생했습니다. 잠시 후 다시 시도하세요.");
+      else setError(e.message || "일시적인 오류가 발생했습니다.");
+
+      // 추가 디버그(개발 중)
+      if (import.meta.env.DEV) {
+        // eslint-disable-next-line no-console
+        console.warn("[Signup error]", e.status, e.payload || e.message);
+      }
     } finally {
       setPending(false);
     }
@@ -62,47 +81,38 @@ export default function Signup() {
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
-      {/* 상단 헤더 (우측 로그인 버튼은 /signup에서 숨기도록 Header에서 이미 처리) */}
       <Header />
-
       <main className="flex flex-1 items-center justify-center px-4">
         <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-md">
           <h2 className="text-2xl font-bold text-center mb-6">회원가입</h2>
 
-          {/* 상단 공통 에러 */}
           {error && (
             <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
               {error}
             </div>
           )}
 
-          <form onSubmit={onSubmit} className="space-y-4">
-            {/* 아이디 */}
+          <form onSubmit={onSubmit} className="space-y-4" noValidate>
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">
-                아이디
-              </label>
+              <label className="mb-1 block text-sm font-medium text-gray-700">이메일</label>
               <input
-                type="text"
+                type="email"
+                autoComplete="email"
                 value={id}
                 onChange={(e) => setId(e.target.value)}
                 className={`w-full rounded-lg border px-3 py-2 text-sm outline-none ${
                   fieldErr.id ? "border-red-400" : "border-gray-300"
                 }`}
-                placeholder="아이디를 입력하세요"
+                placeholder="이메일을 입력하세요"
               />
-              {fieldErr.id && (
-                <p className="mt-1 text-xs text-red-500">{fieldErr.id}</p>
-              )}
+              {fieldErr.id && <p className="mt-1 text-xs text-red-500">{fieldErr.id}</p>}
             </div>
 
-            {/* 비밀번호 */}
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">
-                비밀번호
-              </label>
+              <label className="mb-1 block text-sm font-medium text-gray-700">비밀번호</label>
               <input
                 type="password"
+                autoComplete="new-password"
                 value={pw}
                 onChange={(e) => setPw(e.target.value)}
                 className={`w-full rounded-lg border px-3 py-2 text-sm outline-none ${
@@ -110,18 +120,14 @@ export default function Signup() {
                 }`}
                 placeholder="비밀번호 (4자 이상)"
               />
-              {fieldErr.pw && (
-                <p className="mt-1 text-xs text-red-500">{fieldErr.pw}</p>
-              )}
+              {fieldErr.pw && <p className="mt-1 text-xs text-red-500">{fieldErr.pw}</p>}
             </div>
 
-            {/* 비밀번호 확인 */}
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">
-                비밀번호 확인
-              </label>
+              <label className="mb-1 block text-sm font-medium text-gray-700">비밀번호 확인</label>
               <input
                 type="password"
+                autoComplete="new-password"
                 value={pw2}
                 onChange={(e) => setPw2(e.target.value)}
                 className={`w-full rounded-lg border px-3 py-2 text-sm outline-none ${
@@ -129,9 +135,7 @@ export default function Signup() {
                 }`}
                 placeholder="비밀번호를 한 번 더 입력하세요"
               />
-              {fieldErr.pw2 && (
-                <p className="mt-1 text-xs text-red-500">{fieldErr.pw2}</p>
-              )}
+              {fieldErr.pw2 && <p className="mt-1 text-xs text-red-500">{fieldErr.pw2}</p>}
             </div>
 
             <button
@@ -144,14 +148,11 @@ export default function Signup() {
 
             <div className="text-center text-sm text-gray-500">
               이미 계정이 있으신가요?{" "}
-              <Link to="/login" className="underline hover:no-underline">
-                로그인
-              </Link>
+              <Link to="/login" className="underline hover:no-underline">로그인</Link>
             </div>
           </form>
         </div>
       </main>
-
       <Footer />
     </div>
   );

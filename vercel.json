@@ -1,0 +1,16 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://unrecusant-unecliptically-kristal.ngrok-free.dev/aimuse-server/api/:path*"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/api/:path*",
+      "headers": [
+        { "key": "ngrok-skip-browser-warning", "value": "true" }
+      ]
+    }
+  ]
+}
