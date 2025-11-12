@@ -28,7 +28,7 @@ export default function Signup() {
       ok = false;
     }
     if (pw.length < 4) {
-      next.pw = "비밀번호는 4자 이상이어야 합니다.";
+      next.pw = "비밀번호는 8자 이상이어야 합니다.";
       ok = false;
     }
     if (pw2 !== pw) {
@@ -118,7 +118,7 @@ export default function Signup() {
                 className={`w-full rounded-lg border px-3 py-2 text-sm outline-none ${
                   fieldErr.pw ? "border-red-400" : "border-gray-300"
                 }`}
-                placeholder="비밀번호 (4자 이상)"
+                placeholder="비밀번호 (8자 이상)"
               />
               {fieldErr.pw && <p className="mt-1 text-xs text-red-500">{fieldErr.pw}</p>}
             </div>
