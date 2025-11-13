@@ -64,10 +64,10 @@ export default function Header() {
                 {userId}님 환영합니다 👋
               </span>
               <Link
-                to="/app" // 필요하면 /mypage로 바꿔도 됨
+                to="/me" // ✅ Mypages.jsx가 연결된 경로
                 className="inline-flex items-center rounded-xl border px-3 py-1.5 hover:bg-gray-50"
-              >
-                마이페이지
+                >
+                  마이페이지
               </Link>
               <button
                 onClick={handleLogout}

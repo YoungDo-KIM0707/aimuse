@@ -1,20 +1,21 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import Footer from "./components/Footer";
-import { postText } from "./lib/api"; // ★ postJSON 대신 postText
 
 export default function Login() {
   const navigate = useNavigate();
   const [id, setId] = useState("");
   const [pw, setPw] = useState("");
   const [error, setError] = useState("");
-  const [pending, setPending] = useState(false); // ★ 버튼 비활성용
+  const [pending, setPending] = useState(false);
+
+  // 서버 없이 테스트하려면 true
+  const USE_FAKE_LOGIN = false;
 
   const handleLogin = async (e) => {
     e.preventDefault();
     setError("");
 
-    // 간단 검증(선택)
     if (!id.trim() || !pw) {
       setError("이메일과 비밀번호를 입력하세요.");
       return;
@@ -22,27 +23,56 @@ export default function Login() {
 
     try {
       setPending(true);
+      let tokenStr = null;
 
-      // ★ 로그인은 문자열 토큰 응답
-      const tokenStr = await postText("/api/user/login", {
-        email: id.trim(),
-        password: pw,
-      });
-      if (!tokenStr) throw { status: 500, message: "토큰을 받지 못했습니다." };
+      if (USE_FAKE_LOGIN) {
+        // ✅ 서버 없이 임시 토큰
+        tokenStr = "FAKE_TOKEN_" + Math.random().toString(36).slice(2);
+        console.log("[FAKE LOGIN] 임시 토큰:", tokenStr);
+      } else {
+        // ✅ 실제 서버 로그인 요청
+        const res = await fetch(
+          "https://unrecusant-unecliptically-kristal.ngrok-free.dev/aimuse-server/api/user/login",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Accept: "text/plain, */*",
+              "ngrok-skip-browser-warning": "true",
+            },
+            body: JSON.stringify({
+              email: id.trim(),
+              password: pw,
+            }),
+          }
+        );
 
-      // 상태 저장
+        if (!res.ok) {
+          if (res.status === 401)
+            throw new Error("이메일 또는 비밀번호가 올바르지 않습니다.");
+          else throw new Error(`HTTP ${res.status}`);
+        }
+
+        // ✅ 서버가 text/plain 형태로 JWT 반환
+        tokenStr = await res.text();
+      }
+
+      if (!tokenStr || tokenStr.length < 10)
+        throw new Error("토큰을 받지 못했습니다.");
+
+      // ✅ 로그인 상태 저장
       localStorage.setItem("loggedIn", "true");
       localStorage.setItem("userId", id.trim());
-      localStorage.setItem("token", tokenStr);
+      localStorage.setItem("token", tokenStr.trim());
 
-      // 입력값 클리어(선택)
+      console.log("[LOGIN] JWT 저장 완료:", tokenStr);
+
+      // 비밀번호 필드 초기화
       setPw("");
-
-      // 홈으로
       navigate("/");
     } catch (e) {
-      if (e.status === 401) setError("이메일 또는 비밀번호가 올바르지 않습니다.");
-      else setError(e.message || "일시적인 오류가 발생했습니다.");
+      console.error("[LOGIN ERROR]", e);
+      setError(e.message || "로그인 중 오류가 발생했습니다.");
     } finally {
       setPending(false);
     }
@@ -52,7 +82,10 @@ export default function Login() {
     <div className="min-h-screen bg-gray-50 flex flex-col">
       <header className="border-b bg-white/80 backdrop-blur sticky top-0 z-30">
         <nav className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4">
-          <Link to="/" className="text-xl font-extrabold tracking-tight hover:opacity-80">
+          <Link
+            to="/"
+            className="text-xl font-extrabold tracking-tight hover:opacity-80"
+          >
             AIMUSE
           </Link>
         </nav>
@@ -80,7 +113,9 @@ export default function Login() {
               autoComplete="current-password"
             />
 
-            {error && <p className="text-red-500 text-sm text-center">{error}</p>}
+            {error && (
+              <p className="text-red-500 text-sm text-center">{error}</p>
+            )}
 
             <button
               type="submit"

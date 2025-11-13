@@ -7,11 +7,15 @@ export default defineConfig({
   server: {
     proxy: {
       "/api": {
-        target: "https://unrecusant-unecliptically-kristal.ngrok-free.dev/aimuse-server",
+        // ✅ 백엔드 컨텍스트 + /api까지 포함(아래 주소는 네 ngrok)
+        target:
+          "https://unrecusant-unecliptically-kristal.ngrok-free.dev/aimuse-server/api",
         changeOrigin: true,
-        secure: false,
-        // ★ 여기 주석 처리하거나 아래처럼 원본 유지
-        // rewrite: (p) => p,       // 또는 이 줄 자체를 삭제
+        secure: false, // ngrok 인증서 이슈 회피 (true여도 되지만 false가 안전)
+        rewrite: (p) => p.replace(/^\/api/, ""), // "/api/music/upload" → "music/upload"
+        headers: {
+          "ngrok-skip-browser-warning": "true",
+        },
       },
     },
   },

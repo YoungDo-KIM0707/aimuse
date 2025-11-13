@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import Header from "./components/Header";
 import Footer from "./components/Footer";
-import { postJSON, BASE } from "./lib/api"; // ★ BASE도 가져와서 디버그 찍자
+import { postJSON } from "./lib/api"; // ★ BASE도 가져와서 디버그 찍자
 
 export default function Signup() {
   const navigate = useNavigate();
