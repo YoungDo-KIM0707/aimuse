@@ -10,7 +10,7 @@ export default function Login() {
   const [pending, setPending] = useState(false);
 
   // 서버 없이 테스트하려면 true
-  const USE_FAKE_LOGIN = false;
+  const USE_FAKE_LOGIN = true;
 
   const handleLogin = async (e) => {
     e.preventDefault();

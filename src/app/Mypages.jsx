@@ -1,164 +1,240 @@
 // src/app/Mypages.jsx
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
+import { authFetch } from "../lib/api";
 
-// 절대 URL (ngrok + 컨텍스트 + api)
-const BASE = "https://unrecusant-unecliptically-kristal.ngrok-free.dev/aimuse-server/api";
-const UPLOAD_URL = `${BASE}/music/upload`;
-const STATUS_URL = (id) => `${BASE}/music/${id}`;
+const UPLOAD_ENDPOINT = "/api/music/upload";
+// 🔵 서버 안 켜놨을 때: true  → 프론트에서만 업로드 성공 처리
+// 🔵 나중에 백엔드 연결할 때: false → 실제 서버로 업로드
+const USE_MOCK_UPLOAD = true;
+
+// 🔽 이 두 개는 백엔드 친구랑 맞춰서 엔드포인트만 바꾸면 됨
+const PDF_DOWNLOAD_ENDPOINT = "/api/music/result/pdf";
+const MIDI_DOWNLOAD_ENDPOINT = "/api/music/result/midi";
 
 export default function Mypages() {
+  const navigate = useNavigate();
+
   const [file, setFile] = useState(null);
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
   const [pending, setPending] = useState(false);
 
-  // 상태 조회용
-  const [lastId, setLastId] = useState(null);
-  const [proc, setProc] = useState({ status: null, url: null }); // {status, url}
-  const [polling, setPolling] = useState(false);
-  const pollTimer = useRef(null);
+  // 🔹 pendingInstrument: 체크박스로 고른 "임시" 악기
+  // 🔹 instrument: 확인 버튼으로 확정된 악기 (다운로드/라벨/미리보기 기준)
+  const [pendingInstrument, setPendingInstrument] = useState(null);
+  const [instrument, setInstrument] = useState(null);
+
+  // 확인 눌렀는지 여부 → 눌러야 다운로드/미리보기 노출
+  const [showDownload, setShowDownload] = useState(false);
+
+  // 미리보기 상태
+  const [previewUrl, setPreviewUrl] = useState(null);     // PDF blob URL 또는 "mock"
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);  // 열림/접힘 토글 상태
 
   const inputRef = useRef(null);
 
-  // 파일 선택
+  // --- 파일 선택 ---
   const onPick = (f) => {
     if (!f) return;
+
     if (f.type !== "audio/mpeg" && !f.name.toLowerCase().endsWith(".mp3")) {
       setErr("MP3 파일만 업로드할 수 있습니다.");
       setFile(null);
       return;
     }
+
     if (f.size > 50 * 1024 * 1024) {
-      setErr("파일 크기가 너무 큽니다. (최대 50MB 권장)");
+      setErr("파일 크기가 너무 큽니다. (최대 50MB)");
       setFile(null);
       return;
     }
+
     setErr("");
+    setMsg("");
     setFile(f);
   };
 
-  // 업로드
+  // --- 업로드 ---
   const onSubmit = async (e) => {
     e.preventDefault();
     if (!file || pending) return;
+
     setPending(true);
     setMsg("");
     setErr("");
+    setShowDownload(false);     // 새로 업로드하면 이전 결과 영역 숨김
+    setPendingInstrument(null); // 임시 선택 초기화
+    setInstrument(null);        // 확정 선택 초기화
+    setPreviewUrl(null);        // 미리보기 초기화
+    setPreviewOpen(false);      // 접힌 상태로 초기화
 
+    // 🔵 임시 모드: 서버 안 켜져 있을 때 여기서 바로 성공 처리
+    if (USE_MOCK_UPLOAD) {
+      setMsg("업로드가 완료되었습니다.");
+      setFile(null);
+      if (inputRef.current) inputRef.current.value = "";
+      setPending(false);
+      return; // 실제 서버 호출 스킵
+    }
+
+    // 🔵 실제 서버 업로드 모드
     try {
       const fd = new FormData();
       fd.append("file", file);
 
-      const token = localStorage.getItem("token");
-      if (!token) throw new Error("로그인 토큰이 없습니다. 다시 로그인해 주세요.");
-
-      const res = await fetch(UPLOAD_URL, {
+      const res = await authFetch(UPLOAD_ENDPOINT, {
         method: "POST",
-        headers: {
-          Authorization: "Bearer " + token,
-          "ngrok-skip-browser-warning": "true",
-        },
         body: fd,
       });
 
-      if (!res.ok) {
-        if (res.status === 401) throw new Error("401 Unauthorized — 로그인 만료");
-        if (res.status === 403) throw new Error("403 Forbidden — 권한 없음");
-        throw new Error(`업로드 실패 (HTTP ${res.status})`);
+      const ct = res.headers.get("content-type") || "";
+      if (ct.includes("application/json")) {
+        await res.json().catch(() => null);
+      } else {
+        await res.text().catch(() => "");
       }
 
-      const payload = await res.json(); // { musicId, status, userId }
-      setMsg(`✅ 업로드 성공! musicId=${payload.musicId}, status=${payload.status}`);
-      setLastId(payload.musicId);
-      setProc({ status: payload.status ?? "PENDING", url: null });
-
-      // 파일 입력 리셋
+      setMsg("업로드가 완료되었습니다.");
       setFile(null);
       if (inputRef.current) inputRef.current.value = "";
-
-      // 바로 1회 조회 후 폴링 시작
-      await fetchStatus(payload.musicId, true);
-      startPolling(payload.musicId);
     } catch (e2) {
-      setErr(e2.message || "업로드 중 오류가 발생했습니다.");
+      if (e2.status === 401) setErr("인증이 만료되었습니다. 다시 로그인해 주세요.");
+      else if (e2.status === 403) setErr("권한이 없습니다. (403)");
+      else setErr(e2.message || "업로드 중 오류가 발생했습니다.");
     } finally {
       setPending(false);
     }
   };
 
-  // 상태 조회
-  const fetchStatus = async (musicId, quiet = false) => {
+  // --- 파일 다운로드 공통 함수 (authFetch + blob → 강제 다운로드) ---
+  const handleDownload = async (endpoint, filename) => {
     try {
-      const token = localStorage.getItem("token");
-      if (!token) throw new Error("로그인 토큰이 없습니다. 다시 로그인해 주세요.");
-
-      const res = await fetch(STATUS_URL(musicId), {
+      const res = await authFetch(endpoint, {
         method: "GET",
-        headers: {
-          Authorization: "Bearer " + token,
-          Accept: "application/json",
-          "ngrok-skip-browser-warning": "true",
-        },
       });
 
       if (!res.ok) {
-        if (res.status === 401) throw new Error("401 Unauthorized — 로그인 만료");
-        if (res.status === 403) throw new Error("403 Forbidden — 본인 소유 파일만 조회 가능");
-        if (res.status === 404) throw new Error("해당 musicId를 찾을 수 없습니다.");
-        throw new Error(`조회 실패 (HTTP ${res.status})`);
+        throw new Error("다운로드 중 오류가 발생했습니다.");
       }
 
-      const data = await res.json(); // { musicId, status, resultMusicUrl }
-      setProc({ status: data.status, url: data.resultMusicUrl ?? null });
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
 
-      if (!quiet) setMsg(`📡 상태: ${data.status}`);
-
-      // 완료/실패면 폴링 중지
-      if (data.status === "COMPLETED" || data.status === "FAILED") {
-        stopPolling();
-        if (data.status === "COMPLETED") {
-          setMsg("🎉 처리 완료! 아래 다운로드 링크로 결과를 받으세요.");
-        } else {
-          setErr("❌ 처리 실패");
-        }
-      }
-      return data;
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
     } catch (e) {
-      if (!quiet) setErr(e.message || "상태 조회 중 오류가 발생했습니다.");
-      throw e;
+      alert(e.message || "다운로드에 실패했습니다.");
     }
   };
 
-  // 폴링 시작/중지
-  const startPolling = (musicId) => {
-    stopPolling();
-    setPolling(true);
-    pollTimer.current = setInterval(() => {
-      fetchStatus(musicId, true).catch(() => {}); // 조용히 재시도
-    }, 3000); // 3초 간격
-  };
-
-  const stopPolling = () => {
-    if (pollTimer.current) {
-      clearInterval(pollTimer.current);
-      pollTimer.current = null;
+  // --- 악보 미리보기 (PDF) 토글 ---
+  const handlePreview = async (endpoint) => {
+    // 이미 열려 있으면 → 접기
+    if (previewOpen) {
+      setPreviewOpen(false);
+      return;
     }
-    setPolling(false);
+
+    // 닫혀 있고, 이미 URL이 있음 → 다시 열기만
+    if (previewUrl) {
+      setPreviewOpen(true);
+      return;
+    }
+
+    // 처음 여는 경우 → 가져오기
+    setPreviewLoading(true);
+    setPreviewOpen(false);
+
+    // 🔵 서버 안 켜진 상태에서는 임시 박스만 노출
+    if (USE_MOCK_UPLOAD) {
+      setTimeout(() => {
+        setPreviewUrl("mock"); // 임시 값
+        setPreviewLoading(false);
+        setPreviewOpen(true);
+      }, 300);
+      return;
+    }
+
+    try {
+      const res = await authFetch(endpoint, {
+        method: "GET",
+      });
+
+      if (!res.ok) {
+        throw new Error("미리보기 불러오기 중 오류가 발생했습니다.");
+      }
+
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+
+      setPreviewUrl((prev) => {
+        if (prev && prev !== "mock") {
+          window.URL.revokeObjectURL(prev);
+        }
+        return url;
+      });
+      setPreviewOpen(true);
+    } catch (e) {
+      alert(e.message || "미리보기를 불러오지 못했습니다.");
+    } finally {
+      setPreviewLoading(false);
+    }
   };
 
-  // 언마운트 시 타이머 정리
-  useEffect(() => stopPolling, []);
+  // --- 악기 선택 확인 ---
+  const onCheck = () => {
+    if (!pendingInstrument) {
+      alert("악기를 선택해주세요!");
+      return;
+    }
+    // ✔ 여기서만 진짜 선택 악기 변경
+    setInstrument(pendingInstrument);
+    setShowDownload(true);
+    setPreviewOpen(false); // 악기 바꾸고 다시 확인하면 일단 접기
+  };
+
+  // 악기별 설명 문구 (확정된 instrument 기준)
+  const instrumentLabel =
+    instrument === "piano"
+      ? "피아노"
+      : instrument === "guitar"
+      ? "기타"
+      : "선택되지 않음";
+
+  const instrumentDescription =
+    instrument === "piano"
+      ? "피아노 연습 및 채보를 위한 악보가 생성됩니다."
+      : instrument === "guitar"
+      ? "기타 코드 및 리듬을 중심으로 한 악보가 생성됩니다."
+      : "악기를 선택하면 해당 악기에 맞춘 악보와 MIDI 파일을 제공합니다.";
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       <Header />
 
       <main className="flex-1 mx-auto w-full max-w-3xl p-6">
-        <h1 className="text-2xl font-bold mb-4">마이페이지 — 음악 업로드 / 결과 조회</h1>
+        {/* 제목 + 피드백 페이지 이동 버튼 */}
+        <div className="flex items-center justify-between mb-4">
+          <h1 className="text-2xl font-bold">마이페이지 — 음악 업로드</h1>
 
-        {/* 업로드 폼 */}
+          <button
+            onClick={() => navigate("/feedback")}
+            className="px-3 py-1 text-sm bg-black text-white rounded-lg hover:bg-gray-800"
+          >
+            피드백 화면
+          </button>
+        </div>
+
+        {/* 파일 업로드 폼 */}
         <form onSubmit={onSubmit} className="space-y-4">
           <div
             className="border-2 border-dashed rounded-2xl p-8 text-center bg-white cursor-pointer hover:bg-gray-50"
@@ -176,6 +252,7 @@ export default function Mypages() {
             </p>
           </div>
 
+          {/* 메시지 */}
           {msg && (
             <div className="border border-green-200 bg-green-50 p-3 rounded-lg text-sm text-green-700">
               {msg}
@@ -187,6 +264,7 @@ export default function Mypages() {
             </div>
           )}
 
+          {/* 업로드 버튼 */}
           <button
             type="submit"
             disabled={!file || pending}
@@ -196,57 +274,109 @@ export default function Mypages() {
           </button>
         </form>
 
-        {/* 상태/다운로드 영역 */}
-        {lastId && (
-          <div className="mt-8 rounded-xl border bg-white p-5">
-            <div className="flex items-center justify-between">
-              <div className="text-sm text-gray-700">
-                <div>최근 업로드 ID: <b>{lastId}</b></div>
-                <div>
-                  현재 상태:{" "}
-                  <span className="inline-flex items-center rounded-full border px-2 py-0.5 text-xs">
-                    {proc.status || "-"}
-                  </span>
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => fetchStatus(lastId)}
-                  className="rounded-lg border px-3 py-1.5 text-sm hover:bg-gray-50"
-                >
-                  상태 새로고침
-                </button>
-                {polling ? (
-                  <button
-                    onClick={stopPolling}
-                    className="rounded-lg border px-3 py-1.5 text-sm hover:bg-gray-50"
-                  >
-                    폴링 중지
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => startPolling(lastId)}
-                    className="rounded-lg border px-3 py-1.5 text-sm hover:bg-gray-50"
-                  >
-                    폴링 시작
-                  </button>
-                )}
-              </div>
+        {/* ★ 업로드 성공 후에만 체크박스 + 확인 버튼 노출 ★ */}
+        {msg === "업로드가 완료되었습니다." && (
+          <div className="mt-6 p-5 bg-white border rounded-2xl shadow-sm">
+            <div className="flex items-center justify_between mb-3">
+              <h2 className="text-lg font-semibold">악기 선택</h2>
+              <span className="text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-600">
+                선택된 악기: <span className="font-semibold">{instrumentLabel}</span>
+              </span>
             </div>
 
-            {proc.status === "COMPLETED" && proc.url && (
-              <div className="mt-4">
-                <a
-                  href={proc.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center rounded-lg bg-black px-4 py-2 text-sm font-medium text-white hover:bg-gray-800"
-                >
-                  결과 MP3 다운로드
-                </a>
-                <p className="mt-2 text-xs text-gray-500">
-                  * 링크는 약 1시간 후 만료됩니다. 만료 시 다시 조회하여 새 URL을 받아주세요.
-                </p>
+            <p className="text-xs text-gray-500 mb-4">{instrumentDescription}</p>
+
+            <div className="flex items-center space-x-6">
+              {/* 체크박스는 "임시 선택"만 담당 → pendingInstrument 기준 */}
+              <label className="flex items-center space-x-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={pendingInstrument === "piano"}
+                  onChange={() => setPendingInstrument("piano")}
+                />
+                <span>피아노</span>
+              </label>
+
+              <label className="flex items-center space-x-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={pendingInstrument === "guitar"}
+                  onChange={() => setPendingInstrument("guitar")}
+                />
+                <span>기타</span>
+              </label>
+
+              <button
+                onClick={onCheck}
+                className="px-4 py-1 bg-black text-white rounded-lg text-sm"
+              >
+                확인
+              </button>
+            </div>
+
+            {/* ✅ 확인 누른 이후에만 다운로드 / 미리보기 버튼 표시 (확정 instrument 기준) */}
+            {showDownload && instrument && (
+              <div className="mt-5 space-y-4">
+                <div className="flex flex-wrap gap-3">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleDownload(
+                        PDF_DOWNLOAD_ENDPOINT,
+                        instrument === "piano" ? "piano_score.pdf" : "guitar_score.pdf"
+                      )
+                    }
+                    className="px-4 py-2 rounded-lg border bg-gray-100 text-sm hover:bg-gray-200"
+                  >
+                    악보 PDF 다운로드
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleDownload(
+                        MIDI_DOWNLOAD_ENDPOINT,
+                        instrument === "piano" ? "piano.mid" : "guitar.mid"
+                      )
+                    }
+                    className="px-4 py-2 rounded-lg border bg-gray-100 text-sm hover:bg-gray-200"
+                  >
+                    음원 MIDI 다운로드
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handlePreview(PDF_DOWNLOAD_ENDPOINT)}
+                    className="px-4 py-2 rounded-lg border bg-gray-100 text-sm hover:bg-gray-200"
+                  >
+                    {previewOpen ? "악보 미리보기 접기" : "악보 미리보기"}
+                  </button>
+                </div>
+
+                {/* 🔍 미리보기 영역 (흰 배경 + 그림자 카드 스타일, 토글 가능) */}
+                {previewLoading && (
+                  <div className="mt-2 text-sm text-gray-500">
+                    악보를 불러오는 중입니다...
+                  </div>
+                )}
+
+                {previewOpen && previewUrl && (
+                  <div className="mt-3 rounded-2xl bg-white shadow-md border p-4">
+                    {USE_MOCK_UPLOAD && previewUrl === "mock" ? (
+                      <div className="h-80 flex items-center justify-center text-center text-gray-500 text-sm">
+                        현재는 데모 모드입니다.
+                        <br />
+                        백엔드 연동 후에는 실제 악보 PDF가 이 영역에 표시됩니다.
+                      </div>
+                    ) : (
+                      <iframe
+                        title="악보 미리보기"
+                        src={previewUrl}
+                        className="w-full h-96 rounded-xl"
+                      />
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>

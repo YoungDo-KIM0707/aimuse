@@ -124,7 +124,7 @@ export default function App() {
             {[
               { n: 1, t: "파일 업로드", d: "오디오 파일(mp3/wav)을 업로드" },
               { n: 2, t: "분석/추출", d: "트랙 분리·피치/리듬 추출 진행" },
-              { n: 3, t: "악보 출력", d: "MIDI/PDF로 다운로드" },
+              { n: 3, t: "악보 출력,음원 추출", d: "MIDI/PDF로 다운로드" },
             ].map((s) => (
               <li
                 key={s.n}

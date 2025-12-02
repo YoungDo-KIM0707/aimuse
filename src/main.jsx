@@ -10,6 +10,7 @@ import Creators from "./Creators";
 import Signup from "./Signup";
 import Mypages from "./app/Mypages";         
 import RequireAuth from "./routes/RequireAuth"; 
+import Feedback from "./app/Feedback"; 
 import "./index.css";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
@@ -23,6 +24,8 @@ ReactDOM.createRoot(document.getElementById("root")).render(
         <Route path="/creators" element={<Creators />} />
         <Route path="/signup" element={<Signup />} />
         <Route path="/me" element={<RequireAuth> <Mypages /> </RequireAuth>}/>
+        <Route path="/feedback" element={<Feedback />} />
+
       </Routes>
     </BrowserRouter>
   </React.StrictMode>
